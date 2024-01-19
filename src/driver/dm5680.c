@@ -41,113 +41,104 @@ pthread_mutex_t cmd_to5680_mutex;
 static struct timeval short_click_timeout;
 struct timeval *wait_timeout = NULL;
 
-uint8_t uart_parse_core(uint8_t *buff, uint8_t *rptr, uint8_t *wptr, uint8_t *state, uint8_t *len, uint8_t *payload, uint8_t *payload_ptr) {
-    uint8_t pkt_cnt = 0;
+void uart_parse_payload(uint8_t sel, uint8_t *payload) {
+
+    // LOGI("UART%d:Cmd=%x,len=%x,Value=%x", sel + 1, payload[1], payload[0], payload[2]);
+
+    switch (payload[1]) {
+    case 0x01:
+        DM5680_get_ver(sel, payload);
+        break;
+    case 0x11: // Valid_channel
+        DM5680_get_vldflg(sel, payload);
+        break;
+
+    case 0x12: // rssi0 rssi1 DLQ Stat crc
+        DM5680_get_rssi(sel, payload);
+        break;
+
+    case 0x14: // vtx_type vtx_ver vtx_stat crc
+        DM5680_get_vtxinfo(sel, payload);
+        break;
+
+    case 0x15:      // osd_data....... crc
+        if (!sel) { // Update OSD from UART1 only sel: 1=from left, 0= from right
+            DM5680_OSD_parse(&payload[2], payload[0] - 1);
+            g_osd_update_cnt = 0;
+        }
+        break;
+
+    case 0x20: // right_btn
+        if (sel) {
+            g_key = RIGHT_KEY_CLICK + (payload[2] & 1);
+            LOGI("btn:%x", payload[2]); // 0=short,1=long
+            if (payload[2]) {
+                rbtn_click(RIGHT_LONG_PRESS);
+            } else if (wait_timeout != NULL) {
+                wait_timeout = NULL;
+                rbtn_click(RIGHT_DOUBLE_CLICK);
+            } else {
+                wait_timeout = &short_click_timeout;
+                wait_timeout->tv_usec = 250000;
+            }
+        }
+        break;
+
+    case 0x19: // Read DM5680 reg
+        DM5680_get_regval(sel, payload);
+        break;
+
+    default:
+        LOGE("UART%d bad command", sel + 1);
+        break;
+    }
+}
+
+void uart_parse(uint8_t sel, uint8_t *state, uint8_t *len, uint8_t *payload, uint8_t *payload_ptr) {
+    uint8_t *buf = sel ? uart_buffer[1] : uart_buffer[0];
+    uint8_t *rptr = sel ? &uart_rptr[1] : &uart_rptr[0];
+    uint8_t *wptr = sel ? &uart_wptr[1] : &uart_wptr[0];
+
+    uint8_t *ptr;
+    uint8_t i, pkt_cnt;
+
     while (*rptr != *wptr) {
         switch (*state) {
         case 0: //
-            if (buff[*rptr] == 0xCC)
+            if (buf[*rptr] == 0xCC)
                 *state = 1;
             break;
 
         case 1:
-            if (buff[*rptr] == 0x33)
+            if (buf[*rptr] == 0x33)
                 *state = 2;
-            else
-                *state = 0;
             break;
 
         case 2:
-            *len = buff[*rptr];
-            payload[*payload_ptr] = *len;
-            (*payload_ptr)++;
-            *state = 3;
+            if (buf[*rptr] == 0 || buf[*rptr] > 128) {
+                *state = 0;
+            } else {
+                *len = buf[*rptr];
+                *payload_ptr = 0;
+                payload[*payload_ptr] = *len;
+                (*payload_ptr)++;
+                *state = 3;
+            }
             break;
 
         case 3:
-            payload[*payload_ptr] = buff[*rptr];
+            payload[*payload_ptr] = buf[*rptr];
             (*payload_ptr)++;
 
             (*len)--;
             if (*len == 0) {
                 *state = 0;
-                pkt_cnt++;
+                uart_parse_payload(sel, payload);
             }
             break;
         }
         (*rptr)++;
     }
-    return pkt_cnt;
-}
-
-void uart_parse(uint8_t sel, uint8_t *state, uint8_t *len, uint8_t *payload, uint8_t *payload_ptr) {
-    uint8_t *uart_buf = sel ? uart_buffer[1] : uart_buffer[0];
-    uint8_t *uart_buf_rptr = sel ? &uart_rptr[1] : &uart_rptr[0];
-    uint8_t *uart_buf_wptr = sel ? &uart_wptr[1] : &uart_wptr[0];
-
-    uint8_t *ptr;
-    uint8_t i, pkt_cnt;
-
-    pkt_cnt = uart_parse_core(uart_buf, uart_buf_rptr, uart_buf_wptr, state, len, payload, payload_ptr);
-    ptr = payload;
-    while (pkt_cnt--) {
-        // LOGI("UART%d:Cmd=%x,len=%x,Value=%x",sel+1,ptr[1],ptr[0],ptr[2]);
-        switch (ptr[1]) {
-        case 0x01: // Ver
-            DM5680_get_ver(sel, ptr);
-            break;
-
-        case 0x11: // Valid_channel
-            DM5680_get_vldflg(sel, ptr);
-            break;
-
-        case 0x12: // rssi0 rssi1 DLQ Stat crc
-            DM5680_get_rssi(sel, ptr);
-            break;
-
-        case 0x14: // vtx_type vtx_ver vtx_stat crc
-            DM5680_get_vtxinfo(sel, ptr);
-            break;
-
-        case 0x15:      // osd_data....... crc
-            if (!sel) { // Update OSD from UART1 only sel: 1=from left, 0= from right
-                DM5680_OSD_parse(&ptr[2], ptr[0] - 1);
-                g_osd_update_cnt = 0;
-            }
-            break;
-
-        case 0x20: // right_btn
-            if (sel) {
-                g_key = RIGHT_KEY_CLICK + (ptr[2] & 1);
-                LOGI("btn:%x", ptr[2]); // 0=short,1=long
-                if (ptr[2]) {
-                    rbtn_click(RIGHT_LONG_PRESS);
-                } else if (wait_timeout != NULL) {
-                    wait_timeout = NULL;
-                    rbtn_click(RIGHT_DOUBLE_CLICK);
-                } else {
-                    wait_timeout = &short_click_timeout;
-                    wait_timeout->tv_usec = 250000;
-                }
-            }
-            break;
-
-        case 0x19: // Read DM5680 reg
-            DM5680_get_regval(sel, ptr);
-            break;
-
-        default:
-            LOGE("UART%d bad command", sel + 1);
-            break;
-        }
-        (*payload_ptr) -= (ptr[0] + 1);
-        ptr += (ptr[0] + 1);
-    }
-
-    for (i = 0; i < (*payload_ptr); i++)
-        payload[i] = (*ptr++);
-
-    // LOGI("(UART%d:%d %d %d)",sel+1,*uart_buf_rptr,*uart_buf_wptr,*payload_ptr);
 }
 
 static void *pthread_recv_dm5680l(void *arg) {
