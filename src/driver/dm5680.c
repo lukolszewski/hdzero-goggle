@@ -70,6 +70,10 @@ void uart_parse_payload(uint8_t sel, uint8_t *payload) {
 
     case 0x20: // right_btn
         if (sel) {
+            if (payload[0] != 2 || payload[2] > 1) {
+                LOGI("Skip error right btn");
+                break;
+            }
             g_key = RIGHT_KEY_CLICK + (payload[2] & 1);
             LOGI("btn:%x", payload[2]); // 0=short,1=long
             if (payload[2]) {
