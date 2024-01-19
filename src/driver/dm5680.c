@@ -116,6 +116,8 @@ void uart_parse(uint8_t sel, uint8_t *state, uint8_t *len, uint8_t *payload, uin
         case 1:
             if (buf[*rptr] == 0x33)
                 *state = 2;
+            else
+                *state = 0;
             break;
 
         case 2:
