@@ -223,7 +223,7 @@ int IT66021_Get_VTMG(int *freq_ref) {
     int hmax, vmax, hact, vact;
     int i, j;
     double fps;
-    int ret = HDMIIN_VTMG_UNKNOW;
+    int ret = 0;
 
     IT66021_Mask_WR(0, 0x0f, 0x03, 0x00);
 
@@ -260,15 +260,10 @@ int IT66021_Get_VTMG(int *freq_ref) {
     fps = 6831.0 / r9a[1];
     fps = fps * 1000000 / hmax / vmax;
 
-    if (hact == 1920 && vact == 1080) {
-        if (fps < 45 || fps >= 70)
-            ret = HDMIIN_VTMG_1080Pother;
-        else if (fps < 57)
-            ret = HDMIIN_VTMG_1080P50;
-        else
-            ret = HDMIIN_VTMG_1080P60;
-    } else if (hact == 1280 && vact == 720) {
-        if (fps < 57)
+    if (hact == 1920 && vact == 1080)
+        ret = HDMIIN_VTMG_1080P;
+    else if (hact == 1280 && vact == 720) {
+        if (fps < 55)
             ret = HDMIIN_VTMG_720P50;
         else if (fps > 80)
             ret = HDMIIN_VTMG_720P100;
