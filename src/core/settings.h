@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -67,12 +71,18 @@ typedef enum {
     SETTING_RECORD_AUDIO_SOURCE_AV_IN = 2
 } setting_record_audio_source_t;
 
+typedef enum {
+    SETTING_NAMING_CONTIGUOUS,
+    SETTING_NAMING_DATE
+} setting_record_naming_t;
+
 typedef struct {
     bool mode_manual;
     bool format_ts;
     bool osd;
     bool audio;
     setting_record_audio_source_t audio_source;
+    setting_record_naming_t naming;
 } setting_record_t;
 
 typedef struct {
@@ -218,6 +228,15 @@ typedef struct {
 } setting_sources_t;
 
 typedef struct {
+    uint16_t roller;
+    uint16_t left_click;
+    uint16_t left_press;
+    uint16_t right_click;
+    uint16_t right_press;
+    uint16_t right_double_click;
+} setting_inputs_t;
+
+typedef struct {
     bool logging;
     bool selftest;
 } setting_storage_t;
@@ -235,6 +254,7 @@ typedef struct {
     wifi_t wifi;
     setting_osd_t osd;
     setting_clock_t clock;
+    setting_inputs_t inputs;
     ease_use_t ease;
     setting_storage_t storage;
 } setting_t;
@@ -252,3 +272,7 @@ int settings_put_osd_element(const setting_osd_goggle_element_t *element, char *
 int settings_put_osd_element_pos_y(const setting_osd_goggle_element_positions_t *pos, char *config_name);
 int settings_put_osd_element_pos_x(const setting_osd_goggle_element_positions_t *pos, char *config_name);
 int settings_put_osd_element_shown(bool show, char *config_name);
+
+#ifdef __cplusplus
+}
+#endif
